@@ -1,0 +1,91 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: 'Trebuchet MS', 'Arial Black', Arial, sans-serif;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Estrelas animadas no fundo */
+body::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        radial-gradient(2px 2px at 20px 30px, white, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 60px 70px, white, rgba(0,0,0,0)),
+        radial-gradient(1px 1px at 50px 50px, white, rgba(0,0,0,0)),
+        radial-gradient(1px 1px at 130px 80px, white, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 90px 10px, white, rgba(0,0,0,0));
+    background-repeat: repeat;
+    background-size: 200px 200px;
+    opacity: 0.7;
+    animation: twinkle 5s infinite;
+    pointer-events: none;
+}
+
+@keyframes twinkle {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 0.3; }
+}
+
+#game-container {
+    position: relative;
+    box-shadow: 
+        0 0 60px rgba(255, 0, 255, 0.3),
+        0 0 100px rgba(0, 255, 255, 0.2),
+        inset 0 0 20px rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 4px solid transparent;
+    background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+    background-size: 300% 300%;
+    animation: borderGlow 3s ease infinite;
+    padding: 4px;
+}
+
+@keyframes borderGlow {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+
+canvas {
+    display: block;
+    background: #000;
+    border-radius: 6px;
+}
+
+/* Efeito neon no hover */
+#game-container:hover {
+    box-shadow: 
+        0 0 80px rgba(255, 0, 255, 0.5),
+        0 0 120px rgba(0, 255, 255, 0.3),
+        inset 0 0 30px rgba(0, 0, 0, 0.5);
+}
+
+/* v0.9.4 - camada mobile */
+#touch-controls{position:absolute;inset:0;z-index:900;pointer-events:none;display:none;user-select:none;-webkit-user-select:none;touch-action:none}
+#touch-controls .touch-left,#touch-controls .touch-right{position:absolute;bottom:18px;display:flex;gap:12px;align-items:flex-end;pointer-events:auto}
+#touch-controls .touch-left{left:18px}
+#touch-controls .touch-right{right:18px;max-width:330px;flex-wrap:wrap;justify-content:flex-end}
+#touch-controls button{border:2px solid rgba(255,255,255,.72);background:rgba(7,12,20,.68);color:#fff;border-radius:50%;width:72px;height:72px;font:700 16px 'Righteous',sans-serif;backdrop-filter:blur(5px);box-shadow:0 5px 18px rgba(0,0,0,.35);touch-action:none}
+#touch-controls button.attack{width:82px;height:82px;border-color:#ffcf4a;background:rgba(142,60,0,.72)}
+#touch-controls button.ranged{border-color:#5be7ff;background:rgba(0,91,135,.72)}
+#touch-controls button.dash{border-color:#d5a6ff}
+#touch-controls button.jump{border-color:#7dff9c}
+#touch-controls button.pressed{transform:scale(.92);filter:brightness(1.35)}
+@media (pointer:coarse),(max-width:900px){#touch-controls{display:block}.version-tag{font-size:11px!important;top:4px!important;right:4px!important;padding:3px 6px!important}body{height:100dvh}#game-container{width:100vw;max-height:100dvh}}
+@media (max-width:650px){#touch-controls button{width:60px;height:60px;font-size:13px}#touch-controls button.attack{width:70px;height:70px}.touch-right{gap:8px!important;max-width:270px!important}}

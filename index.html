@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <script>window.DEV=false;</script>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>João e Crist: Rumo a Vegas - v0.9.4 16-BIT EDITION</title>
+    <link rel='stylesheet' href='style.css'>
+    <link rel="icon" href="data:,">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        
+        #game-container {
+            position: relative;
+            width: min(1000px, 100vw);
+            aspect-ratio: 20 / 13;
+            box-shadow: 0 8px 28px rgba(0,0,0,.65);
+        }
+        
+        #game {
+            display: block;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        
+        .version-tag {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ffff;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 14px;
+            z-index: 1000;
+        }
+        
+        .new-badge {
+            background: #ff0000;
+            color: #fff;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 10px;
+            margin-left: 5px;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+            #game-container:fullscreen { width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; background:#000; }
+        #game-container:fullscreen { width:100vw; height:100vh; aspect-ratio:auto; }
+        #game-container:fullscreen #game { width:min(100vw, calc(100vh * 20 / 13)); height:min(100vh, calc(100vw * 13 / 20)); }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div class="version-tag">
+            v0.9.4 16-BIT EDITION
+        </div>
+        <canvas id='game' width='1000' height='650'></canvas>
+    </div>
+<!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- CONTROLES E SISTEMAS BASE -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <script src='js/controles.js'></script>
+    <script src='js/gamepad-system.js'></script>
+    <script src='js/sound-system.js'></script>
+    <script src='js/settings-system.js'></script>
+    <script src='js/trophy-system-final.js'></script> <!-- ✅ Sistema único de troféus -->
+    <script src='js/save-system.js'></script>
+    <script src='js/story.js'></script>
+    <script src='js/evolution-system.js'></script>
+    <script src='js/game-over.js'></script>
+    
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- NOVO: SISTEMA DE COMBATE AVANÇADO -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <script src='js/combat-system-advanced.js'></script>
+    
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- PERSONAGENS (versões melhoradas) -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <script src='js/runtime-stability.js'></script> <!-- AssetManager 2.0 / runtime global -->
+    <script src='js/player-joao.js'></script> <!-- CORRIGIDO: versão com patches -->
+    <script src='js/player-crist.js'></script>
+    <script src='js/player-chico.js'></script> <!-- desbloqueável: bônus da pescaria -->
+    
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- INIMIGOS -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <script src='js/enemy.js'></script>
+    <script src='js/enemy-ciclista.js'></script> <!-- ✅ NOVO: Ciclista realista substitui Capanga -->
+    <script src='js/enemy-fast.js'></script>
+    <script src='js/enemy-strong.js'></script>
+    <script src='js/enemy-basic.js'></script>
+    <script src='js/enemy-tank.js'></script>
+    <script src='js/enemy-berserker-melhorado.js'></script>
+    <script src='js/enemy-cowboy.js'></script>
+    <script src='js/enemy-cockroach.js'></script>
+    <script src='js/enemy-vegas.js'></script> <!-- Fases 5 e 6: turistas, segurancas e personagens de Vegas -->
+    <script src='js/enemy-elite.js'></script>  <!-- ✅ EXPANSÃO: Elite, Fantasma, Assassino -->
+    <script src='js/boss-enemies.js'></script>
+    <script src='js/boss-expansion.js'></script>  <!-- ✅ EXPANSÃO: TechBoss, ShadowBoss, GodBoss -->
+    <script src='js/enemy-sprite-renderer.js'></script> <!-- renderer 16-bit unificado -->
+    <script src='js/enemy-factory.js'></script>
+    <script src='js/wave-system.js'></script>  <!-- ✅ EXPANSÃO: Sistema de ondas + Gate de nível -->
+    <script src='js/level.js'></script>
+    <script src='js/level-loader.js'></script> <!-- loading real, manifests e cleanup por fase -->
+    <script src='js/bus-sequence.js'></script> <!-- v0.9.4: sequência Fase 2 -> ônibus -> Fase 3 -->
+    
+    <script src='js/farm-background-16bit.js'></script>
+<script src='js/graphics-upgrade.js'></script> <!-- v5.5: cenários + acabamento visual -->
+    <script src='js/farm-dog-npc.js'></script> <!-- NPC cachorra da fazenda (Fase 1) -->
+    <script src='js/story-cutscenes.js'></script> <!-- Cutscenes narrativas da campanha -->
+    
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- MAIN (deve ser último) -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <script src='js/game-hardening.js'></script> <!-- estabilidade conservadora: timers/erros/cenas -->
+    <script src='js/main.js'></script>
+    <script src='js/fishing-bonus.js'></script> <!-- bônus Pescaria do Chico Fumaça -->
+    <script src='js/game-global-bridge.js'></script> <!-- compatibilidade segura para módulos legados -->
+    <script src='js/missing-sprites-pack.js'></script> <!-- sprites extras: elite/ghost/assassin/bosses/drone -->
+    <script src='js/hud-v093.js'></script>
+    <script src='js/regression-guards.js'></script> <!-- proteção contra regressões estruturais -->
+    <script src='js/touch-controls.js'></script>
+</body>
+</html>
