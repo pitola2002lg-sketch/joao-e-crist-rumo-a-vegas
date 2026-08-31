@@ -3,18 +3,6 @@
 'use strict';
 
 
-const DIALOG_HUDS = {
-  'JOÃO':'assets/ui/dialog-hud-joao.webp',
-  'CRIST':'assets/ui/dialog-hud-crist.webp',
-  'CHICO FUMAÇA':'assets/ui/hud-chico-frame.webp',
-  'O CORONEL':'assets/ui/dialog-hud-generic.webp',
-  'VICTOR':'assets/ui/dialog-hud-generic.webp',
-  'REI DE VEGAS':'assets/ui/dialog-hud-generic.webp',
-  'A SOMBRA':'assets/ui/dialog-hud-generic.webp',
-  'DEUS DAS APOSTAS':'assets/ui/dialog-hud-generic.webp',
-  'BANDIDO':'assets/ui/dialog-hud-generic.webp',
-  'NARRADOR':'assets/ui/dialog-hud-generic.webp'
-};
 const DIALOG_PORTRAITS = {
   'JOÃO':'assets/ui/portrait-joao.webp',
   'CRIST':'assets/ui/portrait-crist.webp',
@@ -223,27 +211,34 @@ class StoryCutsceneManager {
     }
   }
   drawDialogueHud(ctx,speaker,text,scene){
+    // CAIXA DE DIÁLOGO: separada do HUD de gameplay (vida/XP).
     const key=String(speaker||'NARRADOR').toUpperCase();
-    const hud=getSceneImage(DIALOG_HUDS[key]||DIALOG_HUDS['NARRADOR']);
     const portraitSrc=DIALOG_PORTRAITS[key];
     const portrait=portraitSrc?getSceneImage(portraitSrc):null;
-    const x=45,w=910;
-    const aspect=(hud?.complete&&hud.naturalWidth)?(hud.naturalHeight/hud.naturalWidth):0.34;
-    const h=Math.min(205,Math.max(165,Math.round(w*aspect)));
-    const y=650-h-10;
+    const x=42,y=474,w=916,h=158;
     ctx.save();
-    if(hud?.complete&&hud.naturalWidth){ctx.imageSmoothingEnabled=false;ctx.drawImage(hud,x,y,w,h);}else{ctx.fillStyle='rgba(4,10,24,.94)';ctx.fillRect(x,y,w,h);ctx.strokeStyle='#16a8ff';ctx.lineWidth=4;ctx.strokeRect(x,y,w,h);}
-    const portraitX=x+28,portraitY=y+25,portraitW=155,portraitH=h-50;
+    ctx.fillStyle='rgba(3,10,25,.95)';
+    ctx.strokeStyle=key==='NARRADOR'?'#d7a84a':'#29a8ff';
+    ctx.lineWidth=4;
+    ctx.beginPath();ctx.roundRect(x,y,w,h,15);ctx.fill();ctx.stroke();
+    // brilho interno azul discreto
+    ctx.strokeStyle='rgba(101,196,255,.45)';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(x+8,y+8,w-16,h-16,10);ctx.stroke();
+
+    let textX=x+28;
     if(portrait?.complete&&portrait.naturalWidth){
-      const scale=Math.min(portraitW/portrait.naturalWidth,portraitH/portrait.naturalHeight);
+      const boxX=x+18,boxY=y+18,boxW=112,boxH=122;
+      ctx.fillStyle='#08295f';ctx.fillRect(boxX,boxY,boxW,boxH);
+      ctx.strokeStyle='#55c5ff';ctx.lineWidth=2;ctx.strokeRect(boxX+.5,boxY+.5,boxW-1,boxH-1);
+      const scale=Math.min((boxW-10)/portrait.naturalWidth,(boxH-10)/portrait.naturalHeight);
       const pw=portrait.naturalWidth*scale,ph=portrait.naturalHeight*scale;
-      ctx.imageSmoothingEnabled=false;ctx.drawImage(portrait,portraitX+(portraitW-pw)/2,portraitY+(portraitH-ph)/2,pw,ph);
+      ctx.imageSmoothingEnabled=false;ctx.drawImage(portrait,boxX+(boxW-pw)/2,boxY+(boxH-ph)/2,pw,ph);
+      textX=x+154;
     }
-    ctx.textAlign='left';ctx.fillStyle='#fff1c8';ctx.font='bold 24px Bebas Neue';ctx.fillText(speaker,x+220,y+55);
-    ctx.fillStyle='#eef6ff';ctx.font='17px Righteous';
-    const maxWidth=w-260;const words=String(text||'').split(/\s+/);let line='',yy=y+102;
-    for(const word of words){const test=line?line+' '+word:word;if(ctx.measureText(test).width>maxWidth&&line){ctx.fillText(line,x+220,yy);line=word;yy+=26;}else line=test;}if(line)ctx.fillText(line,x+220,yy);
-    ctx.fillStyle='#8fdcff';ctx.font='11px Righteous';ctx.textAlign='right';ctx.fillText(`ENTER/ATAQUE: avançar   ESC: pular   ${this.index+1}/${scene.lines.length}`,x+w-25,y+h-22);
+    ctx.textAlign='left';ctx.fillStyle='#ffd76a';ctx.font='bold 23px Bebas Neue';ctx.fillText(speaker,textX,y+38);
+    ctx.fillStyle='#f4f8ff';ctx.font='16px Righteous';
+    const maxWidth=x+w-textX-30;const words=String(text||'').split(/\s+/);let line='',yy=y+72;
+    for(const word of words){const test=line?line+' '+word:word;if(ctx.measureText(test).width>maxWidth&&line){ctx.fillText(line,textX,yy);line=word;yy+=25;}else line=test;}if(line)ctx.fillText(line,textX,yy);
+    ctx.fillStyle='#8fdcff';ctx.font='10px Righteous';ctx.textAlign='right';ctx.fillText(`ENTER/ATAQUE: avançar   ESC: pular   ${this.index+1}/${scene.lines.length}`,x+w-22,y+h-18);
     ctx.restore();
   }
   draw(ctx,currentLevel,players,levels){

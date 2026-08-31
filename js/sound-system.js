@@ -20,7 +20,8 @@ class SoundSystem {
             busEngine:'assets/sounds/busEngine.wav', busAccelerate:'assets/sounds/busAccelerate.wav', busBrake:'assets/sounds/busBrake.wav', busHorn:'assets/sounds/busHorn.wav',
             busCollision:'assets/sounds/busCollision.wav', busRepair:'assets/sounds/busRepair.wav', busMoney:'assets/sounds/busMoney.wav', busStar:'assets/sounds/busStar.wav',
             busTurbo:'assets/sounds/busTurbo.wav', busCheckpoint:'assets/sounds/busCheckpoint.wav', busDoorOpen:'assets/sounds/busDoorOpen.wav', busDoorClose:'assets/sounds/busDoorClose.wav',
-            busBroken:'assets/sounds/busBroken.wav', busArrival:'assets/sounds/busArrival.wav',
+            busBroken:'assets/sounds/busBroken.wav', busArrival:'assets/sounds/busArrival.wav', busLaneChange:'assets/sounds/busLaneChange.wav', busNearMiss:'assets/sounds/busNearMiss.wav', busRoad:'assets/sounds/busRoad.wav', busWarning:'assets/sounds/busWarning.wav',
+            fishingCast:'assets/sounds/fishingCast.wav', fishingReel:'assets/sounds/fishingReel.wav', fishingSplash:'assets/sounds/fishingSplash.wav', sharkRoar:'assets/sounds/sharkRoar.wav', sharkCharge:'assets/sounds/sharkCharge.wav', sharkBite:'assets/sounds/sharkBite.wav', sharkWave:'assets/sounds/sharkWave.wav',
             punch2:'assets/sounds/punch2.wav', punch3:'assets/sounds/punch3.wav', kick1:'assets/sounds/kick.wav', kick2:'assets/sounds/kick2.wav',
             hit1:'assets/sounds/hit.wav', hit2:'assets/sounds/hit2.wav', hit3:'assets/sounds/hit3.wav',
             enemyHit1:'assets/sounds/enemyHit.wav', enemyHit2:'assets/sounds/enemyHit2.wav', enemyDeath1:'assets/sounds/enemyDeath.wav', enemyDeath2:'assets/sounds/enemyDeath2.wav',
@@ -39,9 +40,9 @@ class SoundSystem {
             playerHurt:['playerHurt1','playerHurt2'], jump:['jump1','jump2'], dash:['dash1','dash2'], shoot:['shoot1','shoot2'],
             menuMove:['menuMove1','menuMove2'], busHorn:['busHorn1','busHorn2'], busCollision:['busCollision1','busCollision2']
         };
-        this.soundCooldownMs = { hit:28, enemyHit:35, punch:30, kick:45, playerHurt:80, menuMove:45, fuse:110, busCollision:120 };
+        this.soundCooldownMs = { hit:28, enemyHit:35, punch:30, kick:45, playerHurt:80, menuMove:45, fuse:110, busCollision:120, busLaneChange:130, busNearMiss:180, busWarning:650, fishingReel:100, fishingSplash:180, sharkRoar:600, sharkCharge:450, sharkBite:250, sharkWave:550 };
         this.soundPitchRange = { punch:.035, kick:.025, hit:.045, enemyHit:.035, playerHurt:.025, jump:.025, dash:.025, shoot:.018, menuMove:.015, busCollision:.02 };
-        this.soundVolumeScale = { hit:.68, enemyHit:.72, punch:.78, kick:.82, playerHurt:.82, ko:.88, shoot:.78, explosion:.80, busCollision:.82, dogBark:.72, menuMove:.72 };
+        this.soundVolumeScale = { hit:.68, enemyHit:.72, punch:.78, kick:.82, playerHurt:.82, ko:.88, shoot:.78, explosion:.80, busCollision:.82, dogBark:.72, menuMove:.72, busLaneChange:.42, busNearMiss:.48, busWarning:.52, fishingCast:.48, fishingReel:.32, fishingSplash:.62, sharkRoar:.76, sharkCharge:.66, sharkBite:.68, sharkWave:.72 };
         this._lastPlayedAt = {};
         this._lastVariantIndex = {};
         this.soundPools = {};
@@ -75,7 +76,7 @@ class SoundSystem {
         this.musicPlaying = true;
         this.musicTempo = tempo;
         // Batida base (kick)
-        const kickInterval = tempo === 'fast' ? 0.3 : tempo === 'slow' ? 0.62 : 0.5;
+        const kickInterval = tempo === 'fast' ? 0.3 : tempo === 'road' ? 0.38 : tempo === 'slow' ? 0.62 : 0.5;
         this.playKick(now, kickInterval, session);
         
         // Linha de baixo
@@ -113,8 +114,8 @@ class SoundSystem {
         if (!this.musicGain || session !== this.musicSessionId) return;
         
         const ctx = this.audioContext;
-        const notes = tempo === 'fast' ? [110,130,147,165] : tempo === 'vegas' ? [98,123.5,146.8,196] : tempo === 'desert' ? [73.4,82.4,110,123.5] : [82.4,98,110,123.5]; // A, B, C#, D
-        const noteLength = tempo === 'fast' ? 0.4 : 0.6;
+        const notes = tempo === 'fast' ? [110,130,147,165] : tempo === 'road' ? [82.4,110,123.5,146.8,123.5,110] : tempo === 'vegas' ? [98,123.5,146.8,196] : tempo === 'desert' ? [73.4,82.4,110,123.5] : [82.4,98,110,123.5]; // A, B, C#, D
+        const noteLength = tempo === 'fast' ? 0.4 : tempo === 'road' ? 0.32 : 0.6;
         
         notes.forEach((freq, i) => {
             const noteTime = startTime + i * noteLength;
@@ -275,6 +276,15 @@ class SoundSystem {
         if (!audio) return;
         try { audio.pause(); audio.currentTime = 0; } catch (_) {}
         delete this.loopingSounds[type];
+    }
+
+    setLoopParams(type, playbackRate=1, volumeScale=null) {
+        const audio=this.loopingSounds[type];
+        if(!audio)return;
+        try {
+            audio.playbackRate=Math.max(.5,Math.min(2,playbackRate));
+            if(volumeScale!=null) audio.volume=Math.max(0,Math.min(1,this.sfxVolume*volumeScale));
+        } catch(_) {}
     }
 
     stopAllLoops() { Object.keys(this.loopingSounds).forEach(k=>this.stopLoop(k)); }

@@ -69,8 +69,9 @@
   function fishingManifest(playerNames=[]){
     const images=['assets/backgrounds/fishing-bonus-lake.webp','assets/npc/chico-fumaca/chico-fumaca-idle.webp','assets/ui/dialog-hud-joao.webp','assets/ui/dialog-hud-crist.webp','assets/ui/hud-chico-frame.webp'];
     for(const k of ['idle','walk1','walk2','walk3','attack1','attack2','attack3','special','hurt','dead','roar']) images.push(`assets/bosses/shark/${k}.webp`);
+    for(const f of ['idle1','idle2','idle3','idle4','walk1','walk2','walk3','walk4','walk5','walk6','attack1','attack2','attack3']) images.push(`assets/players/chico/frames/${f}.webp`);
     images.push(...characterAssets(playerNames));
-    return {id:'fishing',name:'Pescaria do Chico Fumaça',images:uniq(images),sounds:['punch','hit','enemyHit','enemyDeath','explosion']};
+    return {id:'fishing',name:'Pescaria do Chico Fumaça',images:uniq(images),sounds:['punch','hit','enemyHit','enemyDeath','explosion','fishingCast','fishingReel','fishingSplash','sharkRoar','sharkCharge','sharkBite','sharkWave']};
   }
   function busManifest(){
     const images=['assets/backgrounds/bus-bonus-vegas.webp'];
@@ -79,7 +80,7 @@
     for(const c of ['red','blue','yellow','green','black','white']) images.push(`assets/bus/cars/car-${c}.webp`);
     for(const f of ['repair','money','star','turbo']) images.push(`assets/bus/items/${f}.webp`);
     images.push('assets/bus/obstacles/rock.webp');
-    return {id:'bus',name:'Estrada para Vegas',images:uniq(images),sounds:['busEngine','busAccelerate','busBrake','busHorn','busCollision','busRepair','busMoney','busStar','busTurbo','busCheckpoint','busDoorOpen','busDoorClose','busBroken','busArrival']};
+    return {id:'bus',name:'Estrada para Vegas',images:uniq(images),sounds:['busEngine','busAccelerate','busBrake','busHorn','busCollision','busRepair','busMoney','busStar','busTurbo','busCheckpoint','busDoorOpen','busDoorClose','busBroken','busArrival','busLaneChange','busNearMiss','busRoad','busWarning']};
   }
 
   class LevelManager {

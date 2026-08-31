@@ -1,4 +1,4 @@
-// v0.9.4 - HUD 16-bit com moldura visual e dados 100% dinâmicos.
+// v0.9.4 - HUD de GAMEPLAY. Vida/XP/Nível ficam aqui; nunca é usado como caixa de diálogo.
 (() => {
   const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
   const load=(src)=>window.assetManager.image(src,'shared');
@@ -7,11 +7,6 @@
     'Crist':load('assets/ui/hud-crist-frame.webp'),
     'Chico Fumaça':load('assets/ui/hud-chico-frame.webp')
   };
-  const portraits={
-    'João':load('assets/ui/portrait-joao.webp'),
-    'Crist':load('assets/ui/portrait-crist.webp'),
-    'Chico Fumaça':load('assets/ui/portrait-chico.webp')
-  };
 
   function pixelPanel(x,y,w,h,fill='#071b42',stroke='#29a8ff'){
     ctx.fillStyle=fill;ctx.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h));
@@ -19,93 +14,72 @@
   }
   function bar(x,y,w,h,p,kind='life'){
     p=clamp(p);
-    ctx.fillStyle='#07142d';ctx.fillRect(x,y,w,h);
-    ctx.fillStyle='#142542';ctx.fillRect(x+2,y+2,w-4,h-4);
+    ctx.fillStyle='rgba(2,12,30,.92)';ctx.fillRect(x,y,w,h);
     let c='#35e45b';
-    if(kind==='xp') c='#35cfff';
-    else if(kind==='ranged') c='#65edf0';
+    if(kind==='xp')c='#35cfff';
+    else if(kind==='special')c='#ffe05c';
     else if(p<=.25)c='#ef4242'; else if(p<=.5)c='#f0a42f';
-    ctx.fillStyle=c;ctx.fillRect(x+3,y+3,Math.max(0,(w-6)*p),Math.max(1,h-6));
-    if(kind==='ranged'){
-      const fill=Math.max(0,(w-6)*p);ctx.fillStyle='#fff17a';ctx.fillRect(x+3+fill*.65,y+3,fill*.35,Math.max(1,h-6));
-    }
-    ctx.strokeStyle='#65bfff';ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,w-1,h-1);
+    ctx.fillStyle=c;ctx.fillRect(x+2,y+2,Math.max(0,(w-4)*p),Math.max(1,h-4));
+    ctx.strokeStyle='#62c7ff';ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,w-1,h-1);
   }
-  function drawHeart(x,y,s=11){
-    ctx.save();ctx.fillStyle='#ff2638';
+  function heart(x,y,s=12){
+    ctx.save();ctx.fillStyle='#ff3045';
     ctx.fillRect(x+s*.15,y,s*.3,s*.3);ctx.fillRect(x+s*.55,y,s*.3,s*.3);
     ctx.fillRect(x,y+s*.15,s,s*.35);ctx.fillRect(x+s*.15,y+s*.5,s*.7,s*.2);ctx.fillRect(x+s*.3,y+s*.7,s*.4,s*.15);ctx.fillRect(x+s*.42,y+s*.85,s*.16,s*.12);
     ctx.restore();
   }
-
-  function clearDynamicPrintedAreas(x,y,w,h){
-    // Cobre textos e barras impressos na arte para evitar HUD duplicado/sobreposto.
-    const fill='#0a2f73';
-    const line='#2ba9ff';
-    pixelPanel(x+76,y+12,132,26,fill,line);      // nome / slot
-    pixelPanel(x+w-120,y+12,108,26,fill,line);   // coração / vida numérica
-    pixelPanel(x+73,y+40,w-86,25,fill,line);     // barra de vida impressa
-    pixelPanel(x+73,y+68,44,24,fill,line);       // caixa NV
-    pixelPanel(x+120,y+68,92,19,fill,line);      // barra XP
-    pixelPanel(x+215,y+68,71,19,fill,line);      // barra secundária
-    pixelPanel(x+286,y+68,28,19,fill,line);      // rótulo TIRO/COMBO
+  function evoData(p){
+    const e=p?.evolution;
+    const lv=e?.level||e?.currentLevel||1;
+    const xp=e?.xp??e?.currentXP??0;
+    const need=Math.max(1,e?.xpToNextLevel||e?.nextLevelXP||100);
+    return {lv,xp,need};
   }
-
-  function drawPlayer(p,index,total){
-    const w=320,h=106,y=6,x=(total>1&&index===1)?674:6;
-    const frame=hudFrames[p.name]||hudFrames['João'];
-    if(frame?.complete&&frame.naturalWidth){ctx.save();ctx.imageSmoothingEnabled=false;ctx.drawImage(frame,x,y,w,h);ctx.restore();}
-    else {pixelPanel(x,y,w,h);}
-
-    // João e Crist recebem retrato dinâmico. No Chico, o retrato já faz parte da HUD oficial enviada pelo usuário.
-    if(p.name!=='Chico Fumaça'){
-      pixelPanel(x+9,y+15,58,76,'#0a4a91','#73c8ff');
-      const portrait=portraits[p.name];
-      if(portrait?.complete&&portrait.naturalWidth){
-        ctx.save();ctx.imageSmoothingEnabled=false;
-        const scale=Math.min(52/portrait.naturalWidth,68/portrait.naturalHeight);
-        const pw=Math.round(portrait.naturalWidth*scale),ph=Math.round(portrait.naturalHeight*scale);
-        ctx.drawImage(portrait,x+38-pw/2,y+53-ph/2,pw,ph);ctx.restore();
-      }
-    }
-
-    // Nome e slot são dinâmicos: João pode ser P1 ou P2, e Crist também.
-    ctx.textAlign='left';ctx.fillStyle='#fff';ctx.font='bold 18px Righteous';
-    ctx.fillText(`${p.name.toUpperCase()}  P${index+1}`,x+84,y+32);
-
-    // Vida atual/máxima dinâmica.
-    drawHeart(x+w-98,y+18,13);
-    ctx.textAlign='right';ctx.fillStyle='#fff';ctx.font='bold 13px Righteous';
-    ctx.fillText(`${Math.max(0,Math.ceil(p.life))}/${Math.max(1,Math.ceil(p.maxLife))}`,x+w-14,y+31);
-    bar(x+76,y+43,w-84,18,p.life/Math.max(1,p.maxLife),'life');
-
-    // Nível e XP sempre lidos do sistema de evolução atual.
-    let lv=1,xp=0,need=1;
-    if(p.evolution){
-      lv=p.evolution.level||p.evolution.currentLevel||1;
-      xp=p.evolution.xp??p.evolution.currentXP??0;
-      need=p.evolution.xpToNextLevel||p.evolution.nextLevelXP||Math.max(1,xp||1);
-    }
-    ctx.textAlign='left';ctx.fillStyle='#fff';ctx.font='bold 11px Righteous';ctx.fillText(`NV ${lv}`,x+78,y+84);
-    bar(x+122,y+72,88,13,need?xp/need:0,'xp');
-
-    // Barra secundária: tiro do João; no Crist acompanha energia de combate/combo.
-    let secondary=0,label='ESPECIAL';
+  function secondaryData(p){
     if(p.name==='João'&&typeof p.rangedCooldown==='number'){
-      secondary=p.rangedCharging?clamp(p.rangedChargeFrames/(p.rangedMaxCharge||90)):clamp(1-p.rangedCooldown/72);
-      label=p.rangedCharging?'CARGA':'TIRO';
-    } else {
-      secondary=clamp((p.combo||0)/10);label='COMBO';
+      return {label:p.rangedCharging?'CARGA':'TIRO', value:p.rangedCharging?clamp(p.rangedChargeFrames/(p.rangedMaxCharge||90)):clamp(1-p.rangedCooldown/72)};
     }
-    bar(x+219,y+72,62,13,secondary,'ranged');
-    ctx.textAlign='right';ctx.fillStyle='#e8faff';ctx.font='bold 9px Righteous';ctx.fillText(label,x+w-10,y+84);
+    return {label:'COMBO',value:clamp((p.combo||0)/10)};
+  }
+  function drawPlayer(p,index,total){
+    if(!p)return;
+    const w=326,h=109,y=6,x=(total>1&&index===1)?668:6;
+    const frame=hudFrames[p.name]||hudFrames['João'];
+    ctx.save();ctx.imageSmoothingEnabled=false;
+    if(frame?.complete&&frame.naturalWidth)ctx.drawImage(frame,x,y,w,h);
+    else pixelPanel(x,y,w,h);
+
+    // A arte já contém o retrato correto. Os dados abaixo ocupam somente os campos vazios.
+    const dataX=x+78;
+    const right=x+w-14;
+    const {lv,xp,need}=evoData(p);
+    ctx.textAlign='left';ctx.fillStyle='#f7fbff';ctx.font='bold 15px Righteous';
+    ctx.fillText(`${p.name.toUpperCase()}  •  P${index+1}`,dataX,y+28);
+    ctx.fillStyle='#9ee7ff';ctx.font='bold 11px Righteous';ctx.fillText(`NÍVEL ${lv}`,dataX,y+45);
+
+    heart(x+w-106,y+18,13);
+    ctx.textAlign='right';ctx.fillStyle='#fff';ctx.font='bold 13px Righteous';
+    ctx.fillText(`${Math.max(0,Math.ceil(p.life))}/${Math.max(1,Math.ceil(p.maxLife))}`,right,y+30);
+
+    // Campo grande inferior: VIDA + XP + especial/combo.
+    ctx.textAlign='left';ctx.font='bold 9px Righteous';ctx.fillStyle='#dff5ff';ctx.fillText('VIDA',dataX,y+62);
+    bar(dataX+34,y+54,w-126,11,p.life/Math.max(1,p.maxLife),'life');
+    ctx.fillText('XP',dataX,y+82);
+    bar(dataX+34,y+74,118,10,xp/need,'xp');
+    ctx.fillStyle='#8fe7ff';ctx.font='8px Righteous';ctx.fillText(`${xp}/${need}`,dataX+157,y+82);
+
+    const sec=secondaryData(p);
+    ctx.fillStyle='#fff1a3';ctx.font='bold 8px Righteous';ctx.fillText(sec.label,dataX+205,y+82);
+    bar(dataX+205,y+87,Math.max(34,w-299),8,sec.value,'special');
+    ctx.restore();
   }
 
   drawHUD=function(){
+    // Segurança: HUD de gameplay só deve existir quando há gameplay/resultado de fase.
+    if(typeof gameState!=='undefined' && ![GameState.PLAYING,GameState.LEVEL_COMPLETE].includes(gameState))return;
     ctx.save();ctx.imageSmoothingEnabled=false;
     const total=players.length;players.forEach((p,i)=>drawPlayer(p,i,total));
 
-    // Informações centrais continuam totalmente dinâmicas.
     const alive=enemies.filter(e=>!e.dead&&e.life>0&&!e.isBossMinion);
     const stage=`FASE ${currentLevelIndex+1}/${LEVELS.length}`;
     let center=stage+`  •  ${alive.filter(e=>!e.isBoss).length} INIMIGOS`;

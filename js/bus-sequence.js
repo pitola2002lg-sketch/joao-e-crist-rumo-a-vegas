@@ -13,6 +13,9 @@
     const BUS_PHASE_Y = 428;
     const COURSE_DISTANCE = 100;
     const SPEEDRUN_TARGET = 72; // segundos; equilibrado para percurso nominal de ~75s
+    const START_COUNTDOWN = 2.4;
+    const COLLISION_GRACE = .72;
+    const NEAR_MISS_X = BUS_X + BUS_W + 22;
 
     const spritePaths = {
         idle: 'assets/bus/idle.webp', moving: 'assets/bus/andando.webp', moving2: 'assets/bus/andando-2.webp', accelerating: 'assets/bus/acelerando.webp', braking: 'assets/bus/freando.webp',
@@ -96,7 +99,7 @@
             this.phase2Waiting = true;
             this.boardingPoint = Math.max(650, (level?.width || 5000) - 390);
             this.busWorldX = Math.max(700, (level?.width || 5000) - 320); // posição final de parada
-            this.busApproachX = (level?.width || 5000) + 320; // começa fora da tela pela direita
+            this.busApproachX = Math.max(0, (this.busWorldX - BUS_PHASE_W) - 900); // sprite novo olha para a direita: entra pela esquerda e avança até a parada
             this.phase2BusArrived = false;
             this.phase2BusStopTimer = 0;
             window.soundSystem?.startLoop?.('busEngine', .42);
@@ -108,6 +111,7 @@
             if (!this.phase2Waiting) return false;
             const alive = (players || []).filter(p => p && p.life > 0);
             if (!alive.length) return false;
+            if(this.phase2ParkHornAt && performance.now()>=this.phase2ParkHornAt){this.phase2ParkHornAt=0;window.soundSystem?.playSound?.('busHorn');}
 
             // Primeiro, o ônibus entra em cena e estaciona.
             if (!this.phase2BusArrived) {
@@ -118,6 +122,8 @@
                     this.phase2BusArrived = true;
                     this.phase2BusStopTimer = performance.now();
                     window.soundSystem?.playSound?.('busBrake');
+                    window.soundSystem?.playSound?.('busArrival');
+                    this.phase2ParkHornAt=performance.now()+520;
                     this.log('[BUS] Ônibus estacionou para embarque');
                 }
                 return false;
@@ -135,10 +141,11 @@
 
         drawBusFacingRight(ctx, sprite, x, y, w=BUS_W, h=BUS_H) {
             if (!sprite?.complete || !sprite.naturalWidth) return;
+            // Os novos sprites do ônibus já foram desenhados com a frente para a direita.
+            // Não aplicar flip aqui: isso invertia o ônibus em cutscenes e chegada/saída.
             ctx.save();
-            ctx.translate(x + w, y);
-            ctx.scale(-1, 1);
-            ctx.drawImage(sprite, 0, 0, w, h);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(sprite, x, y, w, h);
             ctx.restore();
         }
 
@@ -224,10 +231,16 @@
                 obstacles:[], items:[], spawnTimer:.6, itemTimer:6, hornCooldown:0, hornText:0,
                 invincible:0, turbo:0, collisionFlash:0, collisions:restoredCollisions, checkpointReached:!!checkpoint,
                 checkpoint: checkpoint || null, state:'running', stateTimer:0, distanceLabel:'12 km', shake:0,
-                roadsideSeed:Math.random()*10000, safeLane:1, safeLaneWaves:0, nextSafeLane:null, safeLaneTransition:0
+                roadsideSeed:Math.random()*10000, safeLane:1, safeLaneWaves:0, nextSafeLane:null, safeLaneTransition:0,
+                countdown: checkpoint ? .8 : START_COUNTDOWN, collisionGrace:0, laneChangeCooldown:0, warningCooldown:0,
+                nearMisses:0, nearMissStreak:0, bestNearMissStreak:0, feedback:[], lastResistanceBand:restoredResistance<=30?2:restoredResistance<=60?1:0,
+                cleanTimer:0, speedBonusTimer:0, tripStarted:false
             };
             this.lastTime=performance.now(); this.hornWasDown=false; this.errorMessage=null;
-            window.soundSystem?.startLoop?.('busEngine', .48);
+            window.soundSystem?.startLoop?.('busEngine', .44);
+            window.soundSystem?.startLoop?.('busRoad', .16);
+            window.soundSystem?.stopMusic?.();
+            window.soundSystem?.startMusic?.('road');
             window.soundSystem?.playSound?.('busAccelerate');
             this.log('[BUS] Minigame iniciado');
         }
@@ -255,25 +268,40 @@
                 if (r.state==='broken') { this.updateBroken(ctx,dt); return null; }
                 if (r.state==='finish') { this.updateFinish(ctx,dt); return r.stateTimer>2.8 ? (this.bonusMode?'BONUS_DONE':'ARRIVAL') : null; }
                 const inp=this.input(keys,gamepadSystem,controls);
+                if(r.countdown>0){
+                    r.countdown=Math.max(0,r.countdown-dt);
+                    r.speed+=(0-r.speed)*Math.min(1,dt*4.5);
+                    this.updateBusAudio(r);
+                    this.drawRoadScene(ctx,r);
+                    this.drawCountdown(ctx,r);
+                    if(r.countdown<=0){r.speed=.72;r.tripStarted=true;window.soundSystem?.playSound?.('busAccelerate');this.pushFeedback('VAI!', '#ffe36b', 1.0);}
+                    return null;
+                }
                 if(inp.right && !r._accelSfx){window.soundSystem?.playSound?.('busAccelerate');r._accelSfx=true;}
                 if(!inp.right)r._accelSfx=false;
                 if(inp.left && !r._brakeSfx){window.soundSystem?.playSound?.('busBrake');r._brakeSfx=true;}
                 if(!inp.left)r._brakeSfx=false;
 
-                if (inp.up && !r._upLatch) { r.targetLane=Math.max(0,r.targetLane-1); r._upLatch=true; }
+                if(r.laneChangeCooldown>0)r.laneChangeCooldown-=dt;
+                if (inp.up && !r._upLatch && r.laneChangeCooldown<=0) { const oldLane=r.targetLane;r.targetLane=Math.max(0,r.targetLane-1); if(r.targetLane!==oldLane){window.soundSystem?.playSound?.('busLaneChange');r.laneChangeCooldown=.16;} r._upLatch=true; }
                 if (!inp.up) r._upLatch=false;
-                if (inp.down && !r._downLatch) { r.targetLane=Math.min(2,r.targetLane+1); r._downLatch=true; }
+                if (inp.down && !r._downLatch && r.laneChangeCooldown<=0) { const oldLane=r.targetLane;r.targetLane=Math.min(2,r.targetLane+1); if(r.targetLane!==oldLane){window.soundSystem?.playSound?.('busLaneChange');r.laneChangeCooldown=.16;} r._downLatch=true; }
                 if (!inp.down) r._downLatch=false;
-                r.y += (LANES[r.targetLane]-r.y)*Math.min(1,dt*8);
+                r.y += (LANES[r.targetLane]-r.y)*Math.min(1,dt*9.5);
+                if(Math.abs(LANES[r.targetLane]-r.y)<1.5){r.y=LANES[r.targetLane];r.lane=r.targetLane;}
 
                 const targetSpeed = inp.left ? .58 : inp.right ? 1.35 : 1.0;
-                r.speed += (targetSpeed-r.speed)*Math.min(1,dt*2.8);
+                r.speed += (targetSpeed-r.speed)*Math.min(1,dt*3.1);
                 if (r.turbo>0) { r.turbo-=dt; r.speed=Math.max(r.speed,1.55); }
                 if (r.invincible>0) r.invincible-=dt;
                 if (r.hornCooldown>0) r.hornCooldown-=dt;
                 if (r.hornText>0) r.hornText-=dt;
                 if (r.collisionFlash>0) r.collisionFlash-=dt;
                 if (r.shake>0) r.shake=Math.max(0,r.shake-dt*12);
+                if(r.collisionGrace>0)r.collisionGrace-=dt;
+                if(r.warningCooldown>0)r.warningCooldown-=dt;
+                this.updateFeedback(dt);
+                this.updateBusAudio(r);
 
                 if (inp.horn && !this.hornWasDown && r.hornCooldown<=0) this.honk();
                 this.hornWasDown=inp.horn;
@@ -285,7 +313,7 @@
                 if(r.spawnTimer<=0){ this.spawnSafePattern(difficulty); r.spawnTimer=Math.max(.62,1.35-difficulty*.22)+Math.random()*.35; }
                 r.itemTimer-=dt; if(r.itemTimer<=0){this.spawnItem();r.itemTimer=7+Math.random()*5;}
                 this.updateObjects(dt);
-                if(!r.checkpointReached && r.progress>=50){r.checkpointReached=true;r.checkpoint={progress:50,elapsed:r.elapsed,resistance:r.resistance,collisions:r.collisions,score:r.score,lane:r.targetLane};window.soundSystem?.playSound?.('busCheckpoint');this.log('[BUS] Checkpoint alcançado');}
+                if(!r.checkpointReached && r.progress>=50){r.checkpointReached=true;r.checkpoint={progress:50,elapsed:r.elapsed,resistance:r.resistance,collisions:r.collisions,score:r.score,lane:r.targetLane};window.soundSystem?.playSound?.('busCheckpoint');this.pushFeedback('CHECKPOINT!', '#83f2a0', 1.5);this.log('[BUS] Checkpoint alcançado');}
                 if(r.progress>=COURSE_DISTANCE){r.progress=COURSE_DISTANCE;r.state='finish';r.stateTimer=0;this.completeRun();}
 
                 this.drawRoadScene(ctx,r);
@@ -324,7 +352,8 @@
             lanes.forEach((lane,idx)=>{
                 const roll=Math.random(); let type='cone';
                 if(roll<.18)type='pothole';else if(roll<.35)type='rock';else if(roll<.68)type='car';else if(roll<.86)type='moto';
-                r.obstacles.push({type,spriteKey:this.pickObstacleSprite(type),lane,x:1060+idx*62,y:LANES[lane],w:type==='car'?92:48,h:type==='car'?48:48,hit:false,drift:type==='moto'?(Math.random()-.5)*8:0});
+                const isCar=type==='car', isMoto=type==='moto', isHole=type==='pothole';
+                r.obstacles.push({type,spriteKey:this.pickObstacleSprite(type),lane,x:1060+idx*72,y:LANES[lane],w:isCar?96:isMoto?58:isHole?52:48,h:isCar?50:isMoto?54:isHole?42:48,hit:false,nearMiss:false,drift:isMoto?(Math.random()-.5)*8:0,speedFactor:isCar?(.84+Math.random()*.18):isMoto?(.94+Math.random()*.22):1});
             });
         }
 
@@ -340,30 +369,49 @@
             if(candidates[0]){candidates[0].removed=true;this.log('[BUS] Rota segura corrigida automaticamente');}
         }
 
-        spawnItem(){const r=this.run;const types=['repair','money','money','star','turbo'];const type=types[Math.floor(Math.random()*types.length)];const lane=Math.floor(Math.random()*3);r.items.push({type,lane,x:1100,y:LANES[lane],w:42,h:42,collected:false});}
+        spawnItem(){const r=this.run;let types=r.resistance<45?['repair','repair','money','star','turbo']:r.progress>65?['repair','money','money','star','turbo','turbo']:['repair','money','money','star','turbo'];const type=types[Math.floor(Math.random()*types.length)];const preferred=[r.safeLane,r.targetLane,0,1,2].filter((v,i,a)=>v!=null&&a.indexOf(v)===i);const lane=preferred[Math.floor(Math.random()*Math.min(2,preferred.length))]??Math.floor(Math.random()*3);r.items.push({type,lane,x:1100,y:LANES[lane],w:42,h:42,collected:false,pulse:Math.random()*6.28});}
 
         updateObjects(dt){
             const r=this.run; const worldSpeed=310*r.speed;
-            r.obstacles.forEach(o=>{o.x-=worldSpeed*dt; if(o.type==='moto')o.y+=Math.sin(r.elapsed*3+o.x*.01)*o.drift*dt;});
+            r.obstacles.forEach(o=>{o.x-=worldSpeed*dt*(o.speedFactor||1); if(o.type==='moto')o.y+=Math.sin(r.elapsed*3+o.x*.01)*o.drift*dt;});
             this.ensureSafeRoute();
             r.items.forEach(i=>i.x-=worldSpeed*dt);
             const busBox={x:BUS_X+25,y:r.y-BUS_H/2+25,w:142,h:55};
-            r.obstacles.forEach(o=>{if(o.hit)return; const box={x:o.x,y:o.y-o.h/2,w:o.w,h:o.h};if(this.rects(busBox,box)){o.hit=true;this.collide(o.type);}});
+            r.obstacles.forEach(o=>{
+                if(o.hit)return;
+                const box={x:o.x,y:o.y-o.h/2,w:o.w,h:o.h};
+                if(this.rects(busBox,box)){o.hit=true;this.collide(o.type);return;}
+                if(!o.nearMiss && o.x<NEAR_MISS_X && o.x+o.w>BUS_X-8){
+                    const laneGap=Math.abs((o.y)-(r.y));
+                    if(laneGap>BUS_H*.48 && laneGap<118){o.nearMiss=true;this.nearMiss();}
+                }
+            });
             r.items.forEach(i=>{if(i.collected)return;const box={x:i.x,y:i.y-i.h/2,w:i.w,h:i.h};if(this.rects(busBox,box)){i.collected=true;this.collect(i.type);}});
             r.obstacles=r.obstacles.filter(o=>o.x>-100&&!o.removed); r.items=r.items.filter(i=>i.x>-80&&!i.collected);
         }
 
         collide(type){
-            const r=this.run;if(r.invincible>0)return;
-            const damage={cone:2,pothole:5,rock:10,car:15,moto:10}[type]||5;
-            r.resistance=Math.max(0,r.resistance-damage);r.collisions++;r.speed=Math.max(.45,r.speed*.62);r.collisionFlash=.32;r.shake=7;
+            const r=this.run;if(r.invincible>0||r.collisionGrace>0)return;
+            const damage={cone:2,pothole:6,rock:10,car:15,moto:9}[type]||5;
+            r.resistance=Math.max(0,r.resistance-damage);r.collisions++;r.nearMissStreak=0;r.speed=Math.max(.45,r.speed*.60);r.collisionFlash=.38;r.shake=8;r.collisionGrace=COLLISION_GRACE;
             window.soundSystem?.playSound?.('busCollision');
+            this.pushFeedback(`-${damage} RESISTÊNCIA`, '#ff716a', 1.25);
             this.log(`[BUS] Colisão: ${type} -${damage}`);
-            window.gamepadSystem?.rumble?.(1,130,.48,.28);
-            if(r.resistance<=0){r.state='broken';r.stateTimer=0;window.soundSystem?.stopLoop?.('busEngine');window.soundSystem?.playSound?.('busBroken');}
+            window.gamepadSystem?.rumble?.(1,170,.62,.34);
+            const band=r.resistance<=30?2:r.resistance<=60?1:0;
+            if(band>r.lastResistanceBand){r.lastResistanceBand=band;window.soundSystem?.playSound?.('busWarning');this.pushFeedback(band===2?'ÔNIBUS MUITO DANIFICADO!':'ÔNIBUS DANIFICADO!', '#ffd36d', 1.8);}
+            if(r.resistance<=0){r.state='broken';r.stateTimer=0;window.soundSystem?.stopLoop?.('busEngine');window.soundSystem?.stopLoop?.('busRoad');window.soundSystem?.stopMusic?.();window.soundSystem?.playSound?.('busBroken');}
         }
 
-        collect(type){const r=this.run;if(type==='repair'){r.resistance=Math.min(100,r.resistance+20);window.soundSystem?.playSound?.('busRepair');}else if(type==='money'){r.score+=250;window.soundSystem?.playSound?.('busMoney');}else if(type==='star'){r.invincible=5;window.soundSystem?.playSound?.('busStar');}else if(type==='turbo'){r.turbo=4;window.soundSystem?.playSound?.('busTurbo');}}
+        collect(type){
+            const r=this.run;
+            if(type==='repair'){const before=r.resistance;r.resistance=Math.min(100,r.resistance+24);r.lastResistanceBand=r.resistance<=30?2:r.resistance<=60?1:0;window.soundSystem?.playSound?.('busRepair');this.pushFeedback(`REPARO +${Math.round(r.resistance-before)}`, '#7df39a', 1.3);}
+            else if(type==='money'){r.score+=250;window.soundSystem?.playSound?.('busMoney');this.pushFeedback('+250', '#ffe36b', 1.0);}
+            else if(type==='star'){r.invincible=5.5;window.soundSystem?.playSound?.('busStar');this.pushFeedback('INVENCÍVEL!', '#b7efff', 1.35);}
+            else if(type==='turbo'){r.turbo=4.5;window.soundSystem?.playSound?.('busTurbo');this.pushFeedback('TURBO!', '#ffb657', 1.35);}
+        }
+
+        nearMiss(){const r=this.run;r.nearMisses++;r.nearMissStreak++;r.bestNearMissStreak=Math.max(r.bestNearMissStreak,r.nearMissStreak);const pts=75+Math.min(225,(r.nearMissStreak-1)*25);r.score+=pts;window.soundSystem?.playSound?.('busNearMiss');this.pushFeedback(`QUASE! +${pts}`, '#8fe7ff', .9);}
 
         honk(){
             const r=this.run;r.hornCooldown=2;r.hornText=.8;let affected=0;window.soundSystem?.playSound?.('busHorn');
@@ -379,11 +427,23 @@
             r.score+=affected*100;
         }
 
+        updateBusAudio(r){
+            const ss=window.soundSystem;if(!ss)return;
+            const rate=.78+Math.max(.25,r.speed)*.28+(r.turbo>0?.12:0);
+            ss.setLoopParams?.('busEngine',rate,.34+Math.min(.18,r.speed*.08));
+            ss.setLoopParams?.('busRoad',.88+Math.min(.35,r.speed*.18),.10+Math.min(.12,r.speed*.055));
+        }
+
+        pushFeedback(text,color='#fff',duration=1.1){const r=this.run;if(!r)return;r.feedback=r.feedback||[];r.feedback.push({text,color,duration,time:duration});if(r.feedback.length>5)r.feedback.shift();}
+        updateFeedback(dt){const r=this.run;if(!r?.feedback)return;r.feedback.forEach(f=>f.time-=dt);r.feedback=r.feedback.filter(f=>f.time>0);}
+        drawFeedback(ctx,r){if(!r.feedback?.length)return;ctx.save();ctx.textAlign='center';r.feedback.slice(-3).forEach((f,i)=>{const a=Math.min(1,f.time/.25);ctx.globalAlpha=Math.max(.15,a);ctx.fillStyle=f.color;ctx.font=`bold ${i===r.feedback.slice(-3).length-1?24:17}px Righteous`;ctx.fillText(f.text,500,205+i*30);});ctx.restore();}
+        drawCountdown(ctx,r){const left=r.countdown;let text='';if(left>1.8)text='3';else if(left>1.2)text='2';else if(left>.6)text='1';else text='VAI!';ctx.save();ctx.fillStyle='rgba(0,0,0,.42)';ctx.fillRect(0,0,W,H);ctx.shadowBlur=22;ctx.shadowColor='#ffcf5a';ctx.fillStyle='#fff2bd';ctx.font='bold 104px Bebas Neue';ctx.textAlign='center';ctx.fillText(text,500,350);ctx.shadowBlur=0;ctx.font='16px Righteous';ctx.fillStyle='#8fe7ff';ctx.fillText('↑↓ TROCAR FAIXA   •   ← FREAR   •   → ACELERAR   •   ATAQUE BUZINAR',500,405);ctx.restore();}
+
         updateBroken(ctx,dt){const r=this.run;r.stateTimer+=dt;this.drawRoadScene(ctx,r);ctx.save();ctx.fillStyle='rgba(0,0,0,.62)';ctx.fillRect(0,0,W,H);ctx.fillStyle='#ffdb6f';ctx.font='bold 54px Bebas Neue';ctx.textAlign='center';ctx.fillText('ÔNIBUS QUEBROU!',500,300);ctx.fillStyle='#fff';ctx.font='20px Righteous';ctx.fillText(r.checkpointReached?'Reiniciando do checkpoint...':'Reiniciando o percurso...',500,342);ctx.restore();if(r.stateTimer>2.2){const cp=r.checkpointReached?r.checkpoint:null;this.startMinigame(this.bonusMode,cp);}}
         updateFinish(ctx,dt){const r=this.run;r.stateTimer+=dt;this.drawRoadScene(ctx,r,true);this.drawFade(ctx,Math.max(0,(r.stateTimer-1.7)/1.1));}
 
         completeRun(){
-            const r=this.run;window.soundSystem?.stopLoop?.('busEngine');window.soundSystem?.playSound?.('busArrival');this.log('[BUS] Minigame concluído');
+            const r=this.run;window.soundSystem?.stopLoop?.('busEngine');window.soundSystem?.stopLoop?.('busRoad');window.soundSystem?.stopMusic?.();window.soundSystem?.playSound?.('busArrival');this.log('[BUS] Minigame concluído');
             const save=window.saveSystem; if(save?.recordBusResult) save.recordBusResult({time:r.elapsed,resistance:r.resistance,noCollision:r.collisions===0});
             if(window.trophySystem){
                 const ts=window.trophySystem;ts.stats.busCompleted=Math.max(1,ts.stats.busCompleted||0);ts.stats.busBestResistance=Math.max(ts.stats.busBestResistance||0,r.resistance);ts.stats.busNoCollision=!!(ts.stats.busNoCollision||r.collisions===0);ts.stats.busBestTime=Math.min(Number.isFinite(ts.stats.busBestTime)?ts.stats.busBestTime:Infinity,r.elapsed);ts.checkTrophies();ts.saveProgress();
@@ -392,13 +452,15 @@
         }
 
         startArrival(players){
-            this.ensureAssets();this.arrival={start:performance.now(),duration:6500,players:(players||[]).map((p,i)=>({p,index:i})),doorOpenSfx:false,doorCloseSfx:false};window.soundSystem?.startLoop?.('busEngine',.42);this.log('[BUS] Iniciando Fase 3');}
+            this.ensureAssets();this.arrival={start:performance.now(),duration:6500,players:(players||[]).map((p,i)=>({p,index:i})),doorOpenSfx:false,doorCloseSfx:false,brakeSfx:false,leaveSfx:false};window.soundSystem?.startLoop?.('busEngine',.42);this.log('[BUS] Iniciando Fase 3');}
 
         updateDrawArrival(ctx, level, players){
             try{
                 if(!this.arrival)this.startArrival(players);const a=this.arrival;const t=Math.min(1,(performance.now()-a.start)/a.duration);
+                if(t>=.27&&!a.brakeSfx){a.brakeSfx=true;window.soundSystem?.playSound?.('busBrake');}
                 if(t>=.38&&!a.doorOpenSfx){a.doorOpenSfx=true;window.soundSystem?.playSound?.('busDoorOpen');}
                 if(t>=.68&&!a.doorCloseSfx){a.doorCloseSfx=true;window.soundSystem?.playSound?.('busDoorClose');}
+                if(t>=.74&&!a.leaveSfx){a.leaveSfx=true;window.soundSystem?.playSound?.('busAccelerate');}
                 level?.drawBackground?.(ctx,0);
                 let bx=-BUS_PHASE_W+Math.min(1,t/.28)*500; if(t>.72)bx=308+(t-.72)/.28*620;
                 let spr=t<.24?this.sprites.arriving:t<.38?this.sprites.braking:t<.48?this.sprites.doorOpening:t<.67?this.sprites.doorOpen:t<.73?this.sprites.doorClosing:this.sprites.leaving;
@@ -493,7 +555,7 @@
             }
             this.drawThreeLaneRoad(ctx,r);
             // objects
-            r.items.forEach(i=>{const img=this.itemSprites[i.type];if(img?.complete&&img.naturalWidth)ctx.drawImage(img,i.x,i.y-i.h/2,i.w,i.h);});
+            r.items.forEach(i=>{const img=this.itemSprites[i.type];if(img?.complete&&img.naturalWidth){const pulse=1+Math.sin(r.elapsed*6+(i.pulse||0))*.07;const w=i.w*pulse,h=i.h*pulse;ctx.save();ctx.globalAlpha=.96;ctx.drawImage(img,i.x-(w-i.w)/2,i.y-h/2,w,h);ctx.restore();}});
             r.obstacles.forEach(o=>{const img=this.obstacleSprites[o.spriteKey]||this.obstacleSprites[o.type];if(img?.complete&&img.naturalWidth)ctx.drawImage(img,o.x,o.y-o.h/2,o.w,o.h);});
             // ônibus: usa os novos quadros da sprite sheet, incluindo dois frames de rodagem
             // e inclinações diferentes ao trocar de faixa para dar mais vida ao movimento.
@@ -507,10 +569,11 @@
                 const laneDelta=LANES[r.targetLane]-r.y;
                 if(Math.abs(laneDelta)>4)spr=laneDelta<0?(this.sprites.turningUp||this.sprites.turning):(this.sprites.turningDown||this.sprites.turning);
             }
-            ctx.save();ctx.translate(BUS_X + BUS_W,r.y-BUS_H/2);ctx.scale(-1,1);if(r.invincible>0&&Math.floor(r.elapsed*10)%2===0)ctx.globalAlpha=.55;if(spr?.complete&&spr.naturalWidth)ctx.drawImage(spr,0,0,BUS_W,BUS_H);ctx.restore();
+            ctx.save();ctx.imageSmoothingEnabled=false;if(r.invincible>0&&Math.floor(r.elapsed*10)%2===0)ctx.globalAlpha=.55;if(spr?.complete&&spr.naturalWidth)ctx.drawImage(spr,BUS_X,r.y-BUS_H/2,BUS_W,BUS_H);ctx.restore();
             if(r.speed>1.18)this.drawDust(ctx,BUS_X+28,r.y+44,2);
             ctx.restore();
             this.drawBusHUD(ctx,r,finishing);
+            this.drawFeedback(ctx,r);
         }
 
         drawBusHUD(ctx,r,finishing){
@@ -519,10 +582,11 @@
             ctx.fillStyle='#30252a';ctx.fillRect(36,60,260,15);ctx.fillStyle=r.resistance>50?'#65d86e':r.resistance>25?'#f0b34f':'#e35c54';ctx.fillRect(36,60,260*r.resistance/100,15);
             const remaining=Math.max(0,12*(1-r.progress/100));const label=r.progress>=99?'VEGAS!':remaining>8?'12 km':remaining>4?'8 km':remaining>1?'4 km':'1 km';
             ctx.textAlign='center';ctx.fillStyle='#ffda6a';ctx.font='bold 18px Righteous';ctx.fillText('DISTÂNCIA ATÉ VEGAS',515,43);ctx.fillStyle='#fff';ctx.font='bold 26px Bebas Neue';ctx.fillText(label,515,72);
-            ctx.textAlign='right';ctx.fillStyle='#8fe7ff';ctx.font='16px Righteous';ctx.fillText(`PONTOS ${r.score}`,960,45);ctx.fillStyle=r.hornCooldown<=0?'#ffd66b':'#a59b89';ctx.fillText(r.hornCooldown<=0?'BUZINA PRONTA':`BUZINA ${r.hornCooldown.toFixed(1)}s`,960,72);
+            ctx.textAlign='right';ctx.fillStyle='#8fe7ff';ctx.font='16px Righteous';ctx.fillText(`PONTOS ${r.score}`,960,39);ctx.fillStyle=r.hornCooldown<=0?'#ffd66b':'#a59b89';ctx.fillText(r.hornCooldown<=0?'BUZINA PRONTA':`BUZINA ${r.hornCooldown.toFixed(1)}s`,960,62);ctx.fillStyle='#c6d5e7';ctx.font='12px Righteous';ctx.fillText(`${Math.round(r.speed*92)} km/h  •  QUASE ${r.nearMisses}`,960,84);
+            ctx.fillStyle='rgba(255,255,255,.13)';ctx.fillRect(348,84,334,7);ctx.fillStyle='#66d6ff';ctx.fillRect(348,84,334*(r.progress/100),7);
             if(r.hornText>0){ctx.textAlign='center';ctx.fillStyle='#fff36c';ctx.font='bold 34px Permanent Marker';ctx.fillText('BEEP! BEEP!',500,145);}
             if(r.checkpointReached){ctx.textAlign='left';ctx.fillStyle='#87e7a0';ctx.font='14px Righteous';ctx.fillText('CHECKPOINT ✓',36,92);}
-            if(finishing){ctx.textAlign='center';ctx.fillStyle='#fff3b0';ctx.font='bold 50px Bebas Neue';ctx.fillText('VEGAS!',500,185);}
+            if(finishing){const rank=r.resistance>=85&&r.collisions<=2?'S':r.resistance>=65?'A':r.resistance>=40?'B':'C';ctx.textAlign='center';ctx.fillStyle='#fff3b0';ctx.font='bold 50px Bebas Neue';ctx.fillText('VEGAS!',500,170);ctx.font='16px Righteous';ctx.fillStyle='#fff';ctx.fillText(`TEMPO ${r.elapsed.toFixed(1)}s  •  RESISTÊNCIA ${Math.ceil(r.resistance)}%  •  COLISÕES ${r.collisions}  •  RANK ${rank}`,500,198);}
             ctx.restore();
         }
 
